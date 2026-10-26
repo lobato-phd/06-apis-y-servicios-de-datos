@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+requests
+scikit-learn
+joblib
+pyjwt
+bcrypt
+python-multipart
+websockets

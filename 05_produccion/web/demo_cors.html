@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Demo de CORS</title>
+</head>
+<body>
+  <h1>Demo de CORS</h1>
+
+  <p>Origen de <strong>esta página</strong>: <code id="origen"></code></p>
+  <p>Origen de <strong>la API</strong>: <code id="destino"></code></p>
+  <p>¿Son el mismo origen?: <strong id="mismo"></strong></p>
+
+  <h2>Respuesta de /health</h2>
+  <pre id="out">Cargando…</pre>
+
+  <script>
+    // URL ABSOLUTA a propósito. Con una relativa ("/health") el navegador
+    // pediría siempre al mismo servidor que sirvió esta página, y entonces
+    // nunca habría CORS que demostrar.
+    const API = "http://127.0.0.1:8000";
+
+    origen.textContent = location.origin || "(fichero local, origen 'null')";
+    destino.textContent = API;
+    mismo.textContent = (location.origin === API) ? "SÍ -> CORS no interviene"
+                                                  : "NO -> el navegador exige permiso (CORS)";
+
+    fetch(API + "/health")
+      .then(r => r.json())
+      .then(d => out.textContent = JSON.stringify(d, null, 2))
+      .catch(e => out.textContent =
+        "ERROR: " + e + "\n\n" +
+        "Si pone 'Failed to fetch', abre la consola del navegador (F12).\n" +
+        "Un error de CORS solo se ve ahí: para el JavaScript de la página\n" +
+        "el fallo es indistinguible de que la API esté apagada.");
+  </script>
+</body>
+</html>

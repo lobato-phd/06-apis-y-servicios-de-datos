@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Demo de WebSockets</title>
+  <style>
+    body   { font-family: system-ui, sans-serif; margin: 2rem; max-width: 60rem; }
+    h2     { margin-top: 2rem; }
+    pre    { background: #f4f6f9; padding: .75rem; height: 9rem; overflow-y: auto;
+             border-radius: 4px; margin: 0; }
+    .reloj { font-size: 2.5rem; font-family: Consolas, monospace; }
+    input, button { font-size: 1rem; padding: .35rem .6rem; }
+    .nota  { color: #5b6677; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>WebSockets con FastAPI</h1>
+  <p class="nota">
+    Arranca antes la API: <code>uvicorn 07_websocket:app --port 8000</code>
+  </p>
+
+  <h2>1 · Eco — el ida y vuelta</h2>
+  <input id="texto" placeholder="Escribe algo y pulsa Enviar" size="40">
+  <button onclick="enviarEco()">Enviar</button>
+  <pre id="log_eco"></pre>
+
+  <h2>2 · Reloj — el servidor habla solo</h2>
+  <p class="nota">
+    Nadie pide nada: el servidor envía la hora cada segundo por una conexión que ya
+    estaba abierta. Con HTTP harían falta 60 peticiones por minuto para esto.
+  </p>
+  <div class="reloj" id="reloj">--:--:--</div>
+
+  <h2>3 · Sala — lo que uno dice, lo reciben todos</h2>
+  <p class="nota">Abre esta misma página en otra pestaña y escribe en una de las dos.</p>
+  <input id="chat" placeholder="Mensaje para la sala" size="40">
+  <button onclick="enviarSala()">Enviar</button>
+  <pre id="log_sala"></pre>
+
+  <script>
+    // La API vive en el mismo origen que esta página, así que derivamos la URL del
+    // WebSocket de location: http -> ws, https -> wss.
+    const BASE = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+
+    function apunta(id, texto) {
+      const caja = document.getElementById(id);
+      caja.textContent += texto + "\n";
+      caja.scrollTop = caja.scrollHeight;   // seguir el final
+    }
+
+    // --- 1. Eco ---
+    const wsEco = new WebSocket(BASE + "/ws/eco");
+    wsEco.onopen    = () => apunta("log_eco", "(conectado)");
+    wsEco.onmessage = e  => apunta("log_eco", e.data);
+    wsEco.onclose   = () => apunta("log_eco", "(conexión cerrada)");
+    wsEco.onerror   = () => apunta("log_eco", "ERROR: ¿está arrancada la API?");
+
+    function enviarEco() {
+      const campo = document.getElementById("texto");
+      if (!campo.value) return;
+      apunta("log_eco", "yo: " + campo.value);
+      wsEco.send(campo.value);
+      campo.value = "";
+    }
+
+    // --- 2. Reloj: solo escuchamos, nunca enviamos ---
+    const wsReloj = new WebSocket(BASE + "/ws/reloj");
+    wsReloj.onmessage = e => document.getElementById("reloj").textContent = e.data;
+
+    // --- 3. Sala ---
+    const wsSala = new WebSocket(BASE + "/ws/sala");
+    wsSala.onmessage = e => apunta("log_sala", e.data);
+
+    function enviarSala() {
+      const campo = document.getElementById("chat");
+      if (!campo.value) return;
+      wsSala.send(campo.value);
+      campo.value = "";
+    }
+
+    // Enter también envía, en los dos campos
+    document.getElementById("texto").addEventListener("keydown", e => { if (e.key === "Enter") enviarEco(); });
+    document.getElementById("chat").addEventListener("keydown",  e => { if (e.key === "Enter") enviarSala(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# la transcripcion de Claude Code viaja sin conversion de finales de linea
+*.jsonl -text

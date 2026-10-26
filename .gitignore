@@ -1,0 +1,20 @@
+# Entorno virtual
+.venv/
+
+# Cachés de Python (se regeneran solas; no deben viajar en el repo)
+__pycache__/
+*.py[cod]
+
+# Secretos: nunca al repositorio. Lo que sí se versiona es .env.example
+.env
+.env.*
+!.env.example
+
+# Artefactos que generan los propios ejemplos al ejecutarse
+# (sin prefijo de carpeta: así sobreviven a un renombrado)
+captura.png
+refresh_tokens.json
+
+# copias de seguridad locales del repositorio
+*.zip
+*.7z

@@ -1,0 +1,2107 @@
+{
+  "info": {
+    "name": "APIs y Servicios de Datos",
+    "description": "Colección completa del módulo: **todos los endpoints programados** en el repositorio, bloque por bloque.\n\n## Cómo usarla\n\n1. Comprueba la variable `baseUrl` (por defecto `http://127.0.0.1:8000`).\n2. Arranca la aplicación que corresponda — cada carpeta indica el comando exacto en su descripción. **Solo una puede ocupar el puerto 8000 a la vez.**\n3. Lanza las peticiones. Muchas llevan *tests* que comprueban el comportamiento y dejan notas en la consola de Postman.\n\n## Qué mirar\n\nNo todas las peticiones están para que salgan bien: varias existen para **provocar el fallo** y que se vea la diferencia. Las más instructivas son `POST /v1/predict — EL FALLO SILENCIOSO`, la pareja `id_interno` entre `04_datos_reales` y `05_contrato_salida`, y el `503` de `02_logger`.\n\n## Variables\n\n| Variable | Para qué |\n|---|---|\n| `baseUrl` | URL de tu API local |\n| `api_key` | Debe coincidir con `$env:API_KEY` |\n| `usuario`, `clave` | Credenciales de `usuarios.csv` |\n| `access_token`, `refresh_token` | Se rellenan solas al hacer login |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "clave-secreta-de-prueba",
+      "type": "string"
+    },
+    {
+      "key": "usuario",
+      "value": "manuel",
+      "type": "string"
+    },
+    {
+      "key": "clave",
+      "value": "pepito",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token_viejo",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_type",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 · Consumir APIs ajenas",
+      "description": "Bloque 1 · carpeta `01_consumir/`.\n\nEstas dos peticiones **no necesitan levantar nada**: van contra Open-Meteo, una API pública sin registro. Son el equivalente en Postman de `01b_consulta_robusta.py` y `02_pipeline_tiempo.py`.",
+      "item": [
+        {
+          "name": "Tiempo actual (Salamanca)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://api.open-meteo.com/v1/forecast?latitude=40.97&longitude=-5.66&current_weather=true",
+              "protocol": "https",
+              "host": [
+                "api.open-meteo.com"
+              ],
+              "path": [
+                "v1",
+                "forecast"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "40.97"
+                },
+                {
+                  "key": "longitude",
+                  "value": "-5.66"
+                },
+                {
+                  "key": "current_weather",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Equivale a `01b_consulta_robusta.py`.\n\nPrueba a cambiar `latitude` a 999: la API responde **400 Bad Request**. Y con `current_weather=false` desaparece el bloque que el script busca — el caso que motiva el acceso defensivo con `.get()`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Trae current_weather\", () => pm.expect(pm.response.json()).to.have.property(\"current_weather\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Previsión diaria (etapa EXTRAER)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://api.open-meteo.com/v1/forecast?latitude=40.97&longitude=-5.66&daily=temperature_2m_max&timezone=Europe/Madrid",
+              "protocol": "https",
+              "host": [
+                "api.open-meteo.com"
+              ],
+              "path": [
+                "v1",
+                "forecast"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "40.97"
+                },
+                {
+                  "key": "longitude",
+                  "value": "-5.66"
+                },
+                {
+                  "key": "daily",
+                  "value": "temperature_2m_max"
+                },
+                {
+                  "key": "timezone",
+                  "value": "Europe/Madrid"
+                }
+              ]
+            },
+            "description": "La etapa EXTRAER de `02_pipeline_tiempo.py`. El proveedor devuelve **dos listas paralelas** (`time` y `temperature_2m_max`); la etapa TRANSFORMAR del script las convierte en una lista de registros."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 · Construir APIs (FastAPI)",
+      "description": "Bloque 2 · carpeta `02_construir/`.\n\nCada subcarpeta corresponde a un fichero distinto. **Solo uno puede estar arrancado a la vez** en el puerto 8000: mira la descripción de cada una para saber qué comando lanzar.",
+      "item": [
+        {
+          "name": "01_base · Hello World",
+          "description": "Arranca antes:\n```\ncd 02_construir\nuvicorn 01_base:app --reload --port 8000\n```",
+          "item": [
+            {
+              "name": "GET / — raíz",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": []
+                },
+                "description": "El dict que devuelve la función llega convertido a JSON."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "02_parametros · Path y query params",
+          "description": "Arranca antes:\n```\ncd 02_construir\nuvicorn 02_parametros:app --reload --port 8000\n```",
+          "item": [
+            {
+              "name": "GET /citas — sin filtro",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/citas",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas"
+                  ]
+                },
+                "description": "Los query params son opcionales porque tienen valor por defecto."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /citas — filtrado y limitado",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/citas?autor=Einstein&limite=5",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas"
+                  ],
+                  "query": [
+                    {
+                      "key": "autor",
+                      "value": "Einstein"
+                    },
+                    {
+                      "key": "limite",
+                      "value": "5"
+                    }
+                  ]
+                },
+                "description": "QUERY params: filtran una colección.\n\nOjo: la comparación es `==` exacta. Cambia `Einstein` por `einstein` en minúsculas y no encontrarás nada — el fichero `04_datos_reales` mejora esto con `in` y `.lower()`."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /citas/1 — path param",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/citas/1",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas",
+                    "1"
+                  ]
+                },
+                "description": "PATH param: identifica UN recurso concreto."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /citas/99 — 404 controlado",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/citas/99",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas",
+                    "99"
+                  ]
+                },
+                "description": "`HTTPException(404)` en vez de dejar que reviente con IndexError: *«eso no existe»* en lugar de *«me he roto»*."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /citas/hola — 422 automático",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/citas/hola",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas",
+                    "hola"
+                  ]
+                },
+                "description": "El type hint `indice: int` **no es decorativo**: FastAPI valida y rechaza sin que escribas una línea."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 422\", () => pm.response.to.have.status(422));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "03_pydantic_y_crud · El CRUD completo",
+          "description": "Arranca antes:\n```\ncd 02_construir\nuvicorn 03_pydantic_y_crud:app --reload --port 8000\n```\n\n**Ejecuta las peticiones en orden**: PUT, PATCH y DELETE operan sobre índices que las anteriores modifican. Y recuerda que los datos viven en memoria: al reiniciar el servidor vuelven al estado inicial.",
+          "item": [
+            {
+              "name": "POST /citas — crear (201)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/citas",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas"
+                  ]
+                },
+                "description": "El cuerpo JSON se convierte en un objeto `Cita` gracias al type hint. **201 Created**, no 200: el código de estado también comunica.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"texto\": \"Solo sé que no sé nada\",\n  \"autor\": \"Sócrates\",\n  \"etiquetas\": [\n    \"filosofía\",\n    \"humildad\"\n  ],\n  \"likes\": 3\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 201\", () => pm.response.to.have.status(201));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "POST /citas — inválida (422)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/citas",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas"
+                  ]
+                },
+                "description": "Pydantic valida **antes** de que tu función se ejecute. Mira la respuesta: dice qué campo falla y por qué. Prueba también con `likes: -5` o `likes: \"muchos\"`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"texto\": \"\",\n  \"autor\": \"A\",\n  \"likes\": -5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 422\", () => pm.response.to.have.status(422));",
+                      "pm.test(\"Señala el campo que falla\", () => pm.expect(pm.response.text()).to.include(\"texto\"));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "PUT /citas/0 — reemplazo completo",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/citas/0",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas",
+                    "0"
+                  ]
+                },
+                "description": "PUT **sustituye** el recurso entero. Fíjate en que no enviamos `likes` y la respuesta trae `likes: 0` — no se conserva el anterior, toma el valor por defecto.\n\nLánzalo dos veces seguidas: el estado final es idéntico. Eso es la **idempotencia**, y por eso reintentar un PUT es inocuo.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"texto\": \"Pienso, luego existo (revisada)\",\n  \"autor\": \"Descartes\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"likes vuelve al valor por defecto\", () => pm.expect(pm.response.json().likes).to.eql(0));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "PATCH /citas/0 — solo un campo",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/citas/0",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas",
+                    "0"
+                  ]
+                },
+                "description": "PATCH modifica **solo lo enviado**, gracias a `exclude_unset=True`. Sin él, los campos ausentes llegarían como `None` y borrarían el texto y el autor.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"likes\": 42\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"Conserva texto y autor\", () => {",
+                      "    const j = pm.response.json();",
+                      "    pm.expect(j.likes).to.eql(42);",
+                      "    pm.expect(j.texto).to.not.be.empty;",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "DELETE /citas/2 — borrado (204)",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/citas/2",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "citas",
+                    "2"
+                  ]
+                },
+                "description": "**204 No Content**: hecho, y sin cuerpo que devolver.\n\nOjo a la limitación del ejemplo: el identificador es la POSICIÓN. Tras borrar, las citas siguientes cambian de número. Por eso las APIs reales usan un id estable."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 204\", () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "04_datos_reales · 100 citas y paginación",
+          "description": "Arranca antes:\n```\ncd 02_construir\nuvicorn 04_datos_reales:app --reload --port 8000\n```",
+          "item": [
+            {
+              "name": "GET /v1/citas — sobre con total",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas"
+                  ]
+                },
+                "description": "No devuelve la lista pelada sino un **sobre con `total`**: sin ese dato el cliente no sabe cuántas páginas le quedan.\n\nFíjate también en el `/v1/` de la ruta: versionar es barato hoy y carísimo cuando ya tienes clientes."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"Trae total y resultados\", () => {",
+                      "    const j = pm.response.json();",
+                      "    pm.expect(j).to.have.property(\"total\");",
+                      "    pm.expect(j).to.have.property(\"resultados\");",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /v1/citas — filtro por fragmento",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas?autor=eins&limite=3",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas"
+                  ],
+                  "query": [
+                    {
+                      "key": "autor",
+                      "value": "eins"
+                    },
+                    {
+                      "key": "limite",
+                      "value": "3"
+                    }
+                  ]
+                },
+                "description": "Aquí el filtro usa `in` y `.lower()`, así que **`eins` encuentra a Einstein**. Compáralo con el `==` exacto de `02_parametros`."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /v1/citas — segunda página",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas?limite=10&desplazamiento=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas"
+                  ],
+                  "query": [
+                    {
+                      "key": "limite",
+                      "value": "10"
+                    },
+                    {
+                      "key": "desplazamiento",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Paginación: `limite` + `desplazamiento`. Nunca devuelvas 50.000 filas de golpe."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /v1/citas/0 — LA FUGA",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas/0",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas",
+                    "0"
+                  ]
+                },
+                "description": "**Mira el campo `id_interno` en la respuesta.** Es un campo interno que se está escapando al cliente.\n\nCompara esta misma petición en la carpeta `05_contrato_salida`: allí ya no aparece."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"Aquí SÍ se escapa id_interno\", () => pm.expect(pm.response.json()).to.have.property(\"id_interno\"));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /v1/citas/9999 — 404",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas/9999",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas",
+                    "9999"
+                  ]
+                },
+                "description": "Mismo formato de error en toda la API. `07_app.py` responde con Problem Details (RFC 9457): `application/problem+json` con `title`, `status`, `detail` e `instance`. Ver sección 3.2 de la guía."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "05_contrato_salida · response_model",
+          "description": "Arranca antes:\n```\ncd 02_construir\nuvicorn 05_contrato_salida:app --reload --port 8000\n```\n\nMismos endpoints que `04_datos_reales`, pero con contrato de salida. **Compara las respuestas con las de la carpeta anterior.**",
+          "item": [
+            {
+              "name": "GET /v1/citas — listado ya filtrado",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas?limite=100",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas"
+                  ],
+                  "query": [
+                    {
+                      "key": "limite",
+                      "value": "100"
+                    }
+                  ]
+                },
+                "description": "`ListaCitasOut` recorta cada elemento del sobre. Quítale el `response_model` a `listar` y el `id_interno` reaparece en las cien citas de golpe: el contrato se aplica **endpoint por endpoint**."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"Ninguna cita filtra id_interno\", () => pm.expect(pm.response.text()).to.not.include(\"id_interno\"));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GET /v1/citas/0 — detalle ya filtrado",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/citas/0",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "citas",
+                    "0"
+                  ]
+                },
+                "description": "La función **no ha cambiado**: sigue devolviendo la cita entera con su `id_interno`. Es FastAPI quien recorta al pasar por `CitaOut`. El filtrado no vive en el código, vive en el contrato."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"id_interno ya no sale\", () => pm.expect(pm.response.json()).to.not.have.property(\"id_interno\"));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 · Servir modelos de ML",
+      "description": "Bloque 3 · carpeta `03_modelos/`.\n\nArranca antes:\n```\ncd 03_modelos\nuvicorn 02_servir_modelo:app --reload --port 8000\n```",
+      "item": [
+        {
+          "name": "POST /v1/predict — setosa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "predict"
+              ]
+            },
+            "description": "Medidas de una setosa típica. La respuesta trae **especie y confianza**: no es lo mismo acertar al 99 % que al 34 %, y el cliente necesita ese dato para decidir si actúa o pide revisión humana.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"largo_sepalo\": 5.1,\n  \"ancho_sepalo\": 3.5,\n  \"largo_petalo\": 1.4,\n  \"ancho_petalo\": 0.2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Predice setosa\", () => pm.expect(pm.response.json().especie).to.eql(\"setosa\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/predict — virginica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "predict"
+              ]
+            },
+            "description": "Otra especie, para ver que el modelo discrimina de verdad.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"largo_sepalo\": 6.3,\n  \"ancho_sepalo\": 3.3,\n  \"largo_petalo\": 6.0,\n  \"ancho_petalo\": 2.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Predice virginica\", () => pm.expect(pm.response.json().especie).to.eql(\"virginica\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/predict — EL FALLO SILENCIOSO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "predict"
+              ]
+            },
+            "description": "**Los mismos cuatro números de la setosa, en otro orden.**\n\nNo hay error, ni aviso, ni 500: la API responde `virginica` con **confianza 1.0**. scikit-learn recibe una lista posicional, sin nombres, así que permutar dos medidas no rompe nada — solo hace que todo mienta.\n\nEs la mejor demostración de que en un servicio de ML *«no da error»* y *«funciona»* son cosas muy distintas.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"largo_sepalo\": 1.4,\n  \"ancho_sepalo\": 0.2,\n  \"largo_petalo\": 5.1,\n  \"ancho_petalo\": 3.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Responde con total confianza... y se equivoca\", () => {",
+                  "    const j = pm.response.json();",
+                  "    console.log(\"Especie:\", j.especie, \"· confianza:\", j.confianza);",
+                  "    pm.expect(j.especie).to.not.eql(\"setosa\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/predict — pétalo negativo (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "predict"
+              ]
+            },
+            "description": "Pydantic hace de **guardaespaldas del modelo**. Un modelo no sabe defenderse solo: ante una entrada absurda no protesta, predice una barbaridad con toda seriedad.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"largo_sepalo\": 5.1,\n  \"ancho_sepalo\": 3.5,\n  \"largo_petalo\": -3,\n  \"ancho_petalo\": 0.2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 · Producción: robustez, salud y seguridad",
+      "description": "Bloque 5 · carpeta `05_produccion/`.\n\nArranca la app que toque según la petición:\n```\ncd 05_produccion\nuvicorn 01_main:app --port 8000            # datos + modelo + tiempo\nuvicorn 02_logger:app --port 8000          # el 503 con dominio roto\nuvicorn 03_health:app --port 8000          # + /health\n$env:API_KEY = \"clave-secreta-de-prueba\"\nuvicorn 04_api_key:app --port 8000         # + /v1/privado\nuvicorn 05_cors:app --port 8000            # + CORS y /web\n```",
+      "item": [
+        {
+          "name": "GET /health — el pulso",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "No es decorativo: Render o Railway lo llaman cada pocos segundos y, si falla, **reinician el contenedor solos**.\n\nComprueba también el modelo: un proceso vivo cuyo modelo no cargó está arrancado pero no sirve para nada.\n\n*(Desde `03_health:app` en adelante.)*"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Informa del modelo\", () => pm.expect(pm.response.json()).to.have.property(\"modelo_cargado\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/tiempo — proveedor externo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/tiempo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "tiempo"
+              ]
+            },
+            "description": "Con `01_main` o `03_health` responde 200.\n\n**Con `02_logger` responde 503**, porque el dominio está roto a propósito. Mira las dos caras del fallo: el cliente recibe un mensaje entendible y la terminal de Uvicorn registra la causa técnica real. Dos audiencias, dos mensajes."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 (dominio bueno) o 503 (demo de 02_logger)\", () => pm.expect(pm.response.code).to.be.oneOf([200, 503]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/privado — con API key",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/privado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privado"
+              ]
+            },
+            "description": "Requiere `04_api_key:app` y la variable de entorno `API_KEY` definida con el mismo valor que la variable `api_key` de esta colección."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/privado — clave incorrecta (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "esta-no-es"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/privado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privado"
+              ]
+            },
+            "description": "Nuestro mensaje: `API key inválida`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/privado — sin cabecera (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/privado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privado"
+              ]
+            },
+            "description": "También 401, pero el mensaje delata quién lo emite: `Not authenticated` **lo pone FastAPI** al faltar la cabecera; `API key inválida` es nuestro, de la función `verificar`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"El mensaje lo pone FastAPI\", () => pm.expect(pm.response.text()).to.include(\"Not authenticated\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /health — con Origin permitido (CORS)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "http://localhost:5500"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Requiere `05_cors:app`. Simula la cabecera `Origin` que enviaría un navegador: la respuesta trae `access-control-allow-origin`.\n\nCambia el Origin a `http://evil.com` y esa cabecera desaparece — el navegador bloquearía la respuesta. Ojo: **CORS lo aplica el navegador, no el servidor**; Postman y curl entran igual."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Devuelve la cabecera CORS\", () => pm.expect(pm.response.headers.has(\"access-control-allow-origin\")).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 · Autenticación OAuth2 + JWT",
+      "description": "Bloque 5 · `05_produccion/06_auth_jwt.py`.\n\nArranca antes:\n```\ncd 05_produccion\n$env:JWT_SECRET = \"un-secreto-largo-y-aleatorio\"\nuvicorn 06_auth_jwt:app --port 8000\n```\n\n**Ejecuta las peticiones en orden.** El login guarda los tokens en las variables de la colección; el resto los reutiliza solas.\n\nEl usuario y la contraseña salen de las variables `usuario` y `clave`; si no existen en tu `usuarios.csv`, créalos con `python herramientas/crear_usuario.py`.",
+      "item": [
+        {
+          "name": "1 · POST /auth/token — login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "token"
+              ]
+            },
+            "description": "OAuth2 exige que las credenciales viajen como **formulario** (`x-www-form-urlencoded`), no como JSON. Por eso hace falta el paquete `python-multipart`.\n\nPrueba con una contraseña mala: responde 401 con un mensaje único para «usuario inexistente» y «contraseña incorrecta» — decir cuál de los dos falla confirmaría a un atacante qué cuentas existen.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{usuario}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clave}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    if (j.access_token)  pm.collectionVariables.set(\"access_token\", j.access_token);",
+                  "    if (j.refresh_token) pm.collectionVariables.set(\"refresh_token\", j.refresh_token);",
+                  "    if (j.token_type)    pm.collectionVariables.set(\"token_type\", j.token_type);",
+                  "    console.log(\"Tokens guardados en las variables de la colección.\");",
+                  "} else {",
+                  "    console.error(\"Autenticación fallida. Código: \" + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · GET /auth/me — con el access token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "El token viaja en `Authorization: Bearer ...`. *Bearer* significa «al portador»: vale por sí mismo, sin más pruebas."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · GET /v1/secreto — endpoint protegido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/secreto",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "secreto"
+              ]
+            },
+            "description": "Cualquier endpoint queda protegido con una línea: `Depends(usuario_actual)`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · GET /auth/me con el REFRESH (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{refresh_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "El refresh dura **días**; si valiera como access, un robo sería mucho más grave. El campo `type` del payload es lo que mantiene separados los dos papeles."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Rechaza por tipo de token\", () => pm.expect(pm.response.text()).to.include(\"tipo access\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · POST /auth/refresh — rotación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Devuelve una pareja **nueva** y borra la anterior. Los tokens de las variables se actualizan solos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    // Guardamos el ANTERIOR para la petición 6",
+                  "    pm.collectionVariables.set(\"refresh_token_viejo\",",
+                  "        pm.collectionVariables.get(\"refresh_token\"));",
+                  "    pm.collectionVariables.set(\"access_token\", j.access_token);",
+                  "    pm.collectionVariables.set(\"refresh_token\", j.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · POST /auth/refresh con el viejo (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Cada refresh sirve **una sola vez**. Es una alarma antirrobo: si alguien te copia el refresh y lo usa, el tuyo dará «revocado o ya usado» y sabrás que ha pasado algo raro.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token_viejo}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7 · POST /auth/logout — revocación (204)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Cerrar sesión es borrar el refresh del registro.\n\n**Ojo al matiz:** el access token que ya tiene el cliente sigue siendo válido hasta que caduque. De ahí que se le den minutos de vida y no días. Compruébalo relanzando la petición 2.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8 · POST /auth/refresh tras logout (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "La revocación es real, no un gesto simbólico del lado del cliente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 · App completa (07_app.py) · UN SOLO SERVIDOR",
+      "description": "**Esta carpeta funciona entera sin cambiar de servidor.** Es la que probablemente uses en clase.\n\nArranca antes:\n```\ncd 05_produccion\n$env:API_KEY = \"clave-secreta-de-prueba\"\n$env:JWT_SECRET = \"un-secreto-largo-y-aleatorio\"\nuvicorn 07_app:app --reload --port 8000\n```\n\n`07_app.py` junta todo lo del módulo y aplica la regla de una API real: **leer es público, escribir exige token**. Ejecuta las peticiones en orden.",
+      "item": [
+        {
+          "name": "1 · GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Informa del modelo y de cuántas citas ha cargado."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · GET /v1/citas — lectura pública",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/citas?limite=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "citas"
+              ],
+              "query": [
+                {
+                  "key": "limite",
+                  "value": "3"
+                }
+              ]
+            },
+            "description": "Sin token: leer no requiere credenciales. Y con `response_model`, el `id_interno` no sale."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"No filtra id_interno\", () => pm.expect(pm.response.text()).to.not.include(\"id_interno\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · POST /v1/predict — el modelo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "predict"
+              ]
+            },
+            "description": "También público: predecir no modifica nada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"largo_sepalo\": 5.1,\n  \"ancho_sepalo\": 3.5,\n  \"largo_petalo\": 1.4,\n  \"ancho_petalo\": 0.2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · GET /v1/tiempo — proveedor externo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/tiempo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "tiempo"
+              ]
+            },
+            "description": "Blindado con try/except: si Open-Meteo cae, responde 503 controlado y deja la causa en el log del servidor."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 o 503 controlado\", () => pm.expect(pm.response.code).to.be.oneOf([200, 503]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · GET /v1/privado — capa 1: API key",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/privado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privado"
+              ]
+            },
+            "description": "La cerradura sencilla, conviviendo con el JWT de las peticiones siguientes. Dos capas distintas para dos usos distintos."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · POST /v1/citas SIN token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/citas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "citas"
+              ]
+            },
+            "description": "**Aquí está la diferencia con los ficheros anteriores.** Escribir exige credenciales: sin cabecera `Authorization`, la petición no llega ni a ejecutar el cuerpo de la función.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Intento sin permiso\",\n  \"autor\": \"Anónimo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7 · POST /auth/token — login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Credenciales como formulario, según exige OAuth2. Guarda los tokens en las variables de la colección.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{usuario}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{clave}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    if (j.access_token)  pm.collectionVariables.set(\"access_token\", j.access_token);",
+                  "    if (j.refresh_token) pm.collectionVariables.set(\"refresh_token\", j.refresh_token);",
+                  "    if (j.token_type)    pm.collectionVariables.set(\"token_type\", j.token_type);",
+                  "    console.log(\"Tokens guardados en las variables de la colección.\");",
+                  "} else {",
+                  "    console.error(\"Autenticación fallida. Código: \" + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8 · POST /v1/citas CON token (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/citas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "citas"
+              ]
+            },
+            "description": "La misma petición que la 6, ahora autenticada.\n\nFíjate en la respuesta: devuelve la cita **sin `likes` ni `id_interno`**. El contrato de salida filtra también al escribir.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Lo que se aprende haciendo, no se olvida\",\n  \"autor\": \"Fernando\",\n  \"etiquetas\": [\n    \"curso\"\n  ],\n  \"likes\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"El contrato filtra likes e id_interno\", () => {",
+                  "    const j = pm.response.json();",
+                  "    pm.expect(j).to.not.have.property(\"likes\");",
+                  "    pm.expect(j).to.not.have.property(\"id_interno\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9 · GET /v1/citas — ahí está",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/citas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "citas"
+              ]
+            },
+            "description": "**Sin parámetros, el listado devuelve TODAS las citas**, así que la que acabas de crear aparece la última. `total` ha subido en uno.\n\nPaginar es cosa del cliente: `?limite=20` o `?desplazamiento=100` cuando le convenga. Compáralo con la petición 2, que pide `limite=3`.\n\nLo que sí se valida son los valores: prueba `?limite=-5` y responde **422** — sin esa comprobación, `datos[0:-5]` devolvería casi todo.\n\nY fíjate en que el `POST` ya te devolvió la cita creada en su respuesta: una API bien hecha te ahorra tener que venir a buscarla."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const ultima = j.resultados[j.resultados.length - 1];",
+                  "console.log(\"Total:\", j.total, \"· última:\", ultima.autor,",
+                  "            \"|\", ultima.texto);",
+                  "pm.test(\"Devuelve todas, sin paginar\", () => pm.expect(j.resultados.length).to.eql(j.total));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 · PATCH /v1/citas/0 — modificación parcial",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/citas/0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "citas",
+                "0"
+              ]
+            },
+            "description": "Solo lo enviado, gracias a `exclude_unset=True`: el texto y el autor sobreviven.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"likes\": 99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Conserva texto y autor\", () => pm.expect(pm.response.json().texto).to.not.be.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 · DELETE /v1/citas/0 — borrado (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/citas/0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "citas",
+                "0"
+              ]
+            },
+            "description": "204: hecho, sin cuerpo.\n\nLos datos viven en memoria: reinicia el servidor y vuelven las 100 citas."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 · GET /auth/me — quién soy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "El servidor sabe quién eres por el token, sin sesión ni cookie."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 · POST /auth/logout — cerrar sesión (204)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revoca el refresh. **Ojo:** el access token sigue valiendo hasta caducar — relanza la petición 12 y lo comprobarás. De ahí sus 15 minutos de vida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
